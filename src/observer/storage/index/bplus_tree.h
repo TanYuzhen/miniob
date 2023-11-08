@@ -45,7 +45,8 @@ public:
   int operator()(const char *v1, const char *v2) const
   {
     switch (attr_type_) {
-      case INTS: {
+      case INTS:
+      case DATE: {
         return compare_int((void *)v1, (void *)v2);
       } break;
       case FLOATS: {
@@ -125,6 +126,18 @@ public:
           str.push_back(v[i]);
         }
         return str;
+      }
+      case DATE: {
+        int data = *(int *)v;
+        int y = data / 10000;
+        int m = (data % 10000) / 100;
+        int d = data % 100;
+        std::string y_zero = y < 10 ? "000" : (y < 100 ? "00" : (y < 1000 ? "0" : ""));
+        std::string m_zero = m < 10 ? "0" : "";
+        std::string d_zero = d < 10 ? "0" : "";
+        std::string result =
+            y_zero + std::to_string(y) + "-" + m_zero + std::to_string(m) + "-" + d_zero + std::to_string(d);
+        return result;
       }
       default: {
         LOG_ERROR("unknown attr type. %d", attr_type_);
