@@ -242,9 +242,10 @@ RC DiskBufferPool::close_file()
     return RC::IOERR_CLOSE;
   }
   LOG_INFO("Successfully close file %d:%s.", file_desc_, file_name_.c_str());
-  file_desc_ = -1;
-
+  //  file_desc_ = -1;
+  //  bp_manager_.close_file(file_name_.c_str());
   bp_manager_.close_file(file_name_.c_str());
+  file_desc_ = -1;
   return RC::SUCCESS;
 }
 

@@ -96,7 +96,7 @@ public:
 public:
   RC insert_record(Table *table, Record *record);
   RC delete_record(Table *table, Record *record);
-
+  void delete_table(Table *table);
   RC commit();
   RC rollback();
 

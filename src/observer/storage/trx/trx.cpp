@@ -110,6 +110,10 @@ RC Trx::delete_record(Table *table, Record *record)
   insert_operation(table, Operation::Type::DELETE, record->rid());
   return rc;
 }
+void Trx::delete_table(Table *table)
+{
+  this->operations_.erase(table);
+}
 
 void Trx::set_record_trx_id(Table *table, Record &record, int32_t trx_id, bool deleted) const
 {

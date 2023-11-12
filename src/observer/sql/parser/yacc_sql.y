@@ -270,7 +270,7 @@ type:
 	INT_T { $$=INTS; }
        | STRING_T { $$=CHARS; }
        | FLOAT_T { $$=FLOATS; }
-       | DATE_T { $$=DATE_STR; }
+       | DATE_T { $$=DATE; }
        ;
 ID_get:
 	ID 
@@ -316,6 +316,7 @@ value:
   		value_init_string(&CONTEXT->values[CONTEXT->value_length++], $1);
 		}
 	|DATE_STR{
+	        $1 = substr($1,1,strlen($1)-2);
 	    if(0 != value_init_date(&CONTEXT->values[CONTEXT->value_length++], $1))
 	        return -1;
 	}

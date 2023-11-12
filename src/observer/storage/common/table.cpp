@@ -33,11 +33,13 @@ See the Mulan PSL v2 for more details. */
 Table::~Table()
 {
   if (record_handler_ != nullptr) {
+    record_handler_->close();
     delete record_handler_;
     record_handler_ = nullptr;
   }
 
   if (data_buffer_pool_ != nullptr) {
+    //    BufferPoolManager::instance().close_file(table_data_file(base_dir_.c_str(), name()).c_str());
     data_buffer_pool_->close_file();
     data_buffer_pool_ = nullptr;
   }
@@ -118,6 +120,35 @@ RC Table::create(const char *path, const char *name, const char *base_dir, int a
   clog_manager_ = clog_manager;
   LOG_INFO("Successfully create table %s:%s", base_dir, name);
   return rc;
+}
+
+RC Table::drop(const char *table_name)
+{
+  RC rc = sync();
+  // Firstly, drop the table mete file;
+  std::string table_meta = table_meta_file(base_dir_.c_str(), table_name);
+  if (unlink(table_meta.c_str()) != 0) {
+    LOG_ERROR("Failed to Drop %s , in table.cpp", table_meta.c_str());
+    return RC::IOERR;
+  }
+  // Secondly, drop the table date file;
+  std::string table_date = table_data_file(base_dir_.c_str(), table_name);
+  if (unlink(table_date.c_str()) != 0) {
+    LOG_ERROR("Failed to Drop %s , in table.cpp", table_date.c_str());
+    return RC::IOERR;
+  }
+  // Lastly, drop the table index file;
+  for (auto index : indexes_) {
+    BplusTreeIndex *b_plus_tree_index = (BplusTreeIndex *)index;
+    std::string table_index = table_index_file(base_dir_.c_str(), table_name, b_plus_tree_index->index_meta().name());
+    delete b_plus_tree_index;
+    if (unlink(table_index.c_str()) != 0) {
+      LOG_ERROR("Failed to Drop %s , in table.cpp", table_index.c_str());
+      return RC::IOERR;
+    }
+  }
+  indexes_.clear();
+  return RC::SUCCESS;
 }
 
 RC Table::open(const char *meta_file, const char *base_dir, CLogManager *clog_manager)
@@ -388,7 +419,8 @@ RC Table::init_record_handler(const char *base_dir)
   rc = record_handler_->init(data_buffer_pool_);
   if (rc != RC::SUCCESS) {
     LOG_ERROR("Failed to init record handler. rc=%d:%s", rc, strrc(rc));
-    data_buffer_pool_->close_file();
+    //    data_buffer_pool_->close_file();
+    BufferPoolManager::instance().close_file(table_data_file(base_dir_.c_str(), name()).c_str());
     data_buffer_pool_ = nullptr;
     delete record_handler_;
     record_handler_ = nullptr;

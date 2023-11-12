@@ -67,7 +67,7 @@ int value_init_date(Value *value, const char *v)
 {
   value->type = DATE;
   int y, m, d;
-  sscanf(v, "\"%d-%d-%d\"", &y, &m, &d);
+  sscanf(v, "%d-%d-%d", &y, &m, &d);
   bool whether_right_day = check_date(y, m, d);
   if (!whether_right_day)
     return -1;
