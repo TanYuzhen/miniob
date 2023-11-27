@@ -420,7 +420,7 @@ RC Table::make_record(int value_num, const Value *values, char *&record_out)
     }
     memcpy(record + field->offset(), temp_data, copy_len);
     // free the memory place
-    if (temp_data != nullptr) {
+    if (field->type() != value.type) {
       switch (field->type()) {
         case INTS:
           delete (int *)temp_data;
