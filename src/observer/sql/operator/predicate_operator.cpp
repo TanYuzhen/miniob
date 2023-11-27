@@ -18,6 +18,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/stmt/filter_stmt.h"
 #include "storage/common/field.h"
 #include "util/typecast.h"
+#include "common/lang/defer.h"
 
 RC PredicateOperator::open()
 {
@@ -81,16 +82,34 @@ bool PredicateOperator::do_predicate(RowTuple &tuple)
     AttrType right_type = right_cell.attr_type();
     float *left_temp_data = nullptr;
     float *right_temp_data = nullptr;
+    DEFER([&]() {
+      if (left_temp_data)
+        delete left_temp_data;
+      if (right_temp_data)
+        delete right_temp_data;
+    });
     if (left_type != right_type) {
-      std::unique_ptr<TypeCast> left_type_cast = std::make_unique<TypeCast>(left_type, FLOATS);
-      std::unique_ptr<TypeCast> right_type_cast = std::make_unique<TypeCast>(right_type, FLOATS);
-      left_temp_data = (float *)left_type_cast->cast((void *)left_cell.data());
-      right_temp_data = (float *)right_type_cast->cast((void *)right_cell.data());
-      // reset the float data
-      left_cell.set_data((char *)left_temp_data);
-      left_cell.set_type(FLOATS);
-      right_cell.set_data((char *)right_temp_data);
-      right_cell.set_type(FLOATS);
+      if (left_type == FLOATS) {
+        std::unique_ptr<TypeCast> right_type_cast = std::make_unique<TypeCast>(right_type, FLOATS);
+        right_temp_data = (float *)right_type_cast->cast((void *)right_cell.data());
+        right_cell.set_data((char *)right_temp_data);
+        right_cell.set_type(FLOATS);
+      } else if (right_type == FLOATS) {
+        std::unique_ptr<TypeCast> left_type_cast = std::make_unique<TypeCast>(left_type, FLOATS);
+        left_temp_data = (float *)left_type_cast->cast((void *)left_cell.data());
+        left_cell.set_data((char *)left_temp_data);
+        left_cell.set_type(FLOATS);
+      } else {
+        std::unique_ptr<TypeCast> left_type_cast = std::make_unique<TypeCast>(left_type, FLOATS);
+        std::unique_ptr<TypeCast> right_type_cast = std::make_unique<TypeCast>(right_type, FLOATS);
+        left_temp_data = (float *)left_type_cast->cast((void *)left_cell.data());
+        right_temp_data = (float *)right_type_cast->cast((void *)right_cell.data());
+        // reset the float data
+        left_cell.set_data((char *)left_temp_data);
+        left_cell.set_type(FLOATS);
+        right_cell.set_data((char *)right_temp_data);
+        right_cell.set_type(FLOATS);
+      }
     }
 
     const int compare = left_cell.compare(right_cell);
