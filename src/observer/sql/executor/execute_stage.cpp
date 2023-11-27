@@ -703,7 +703,8 @@ RC ExecuteStage::do_update(SQLStageEvent *sql_event)
     session_event->set_response("FAILURE\n");
   } else {
     session_event->set_response("SUCCESS\n");
-    // Write the clog record,if it is the trx multiple operation mode
+    // TODO: Write the clog record,if it is the trx multiple operation mode
+  }
 }
 
 RC ExecuteStage::do_begin(SQLStageEvent *sql_event)
