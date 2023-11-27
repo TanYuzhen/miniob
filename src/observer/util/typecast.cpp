@@ -61,61 +61,47 @@ void *TypeCast::cast(void *data)
 
 void *TypeCast::int_to_char(void *data)
 {
-  //  std::string s = std::to_string(*(int *)data);
-  //  char *cast_data = new char[s.size() + 1];
-  //  memcpy(cast_data, s.c_str(), s.size());
-  //  return cast_data;
-  int &s = *(int *)data;
-  char *res = new char[11];
-  sprintf(res, "%d", s);
-  return res;
+    std::string s = std::to_string(*(int *)data);
+    char *cast_data = new char[s.size() + 1];
+    memset(cast_data,0,s.size()+1);
+    memcpy(cast_data, s.c_str(), s.size());
+    return cast_data;
 }
 
 void *TypeCast::int_to_float(void *data)
 {
-  //  const int s = *(int *)data;
-  //  float *cast_data = new float(s);
-  //  return cast_data;
-  return new float(*(int *)data);
+    const int s = *(int *)data;
+    float *cast_data = new float(s);
+    return cast_data;
 }
 
 void *TypeCast::float_to_int(void *data)
 {
-  //  const float s = *(float *)data;
-  //  int *cast_data = new int(s + 0.5);  //四舍五入
-  //  return cast_data;
-  float &s = *(float *)data;
-  return new int(s + 0.5);
+    const float s = *(float *)data;
+    int *cast_data = new int(s + 0.5);  //四舍五入
+    return cast_data;
 }
 
 void *TypeCast::float_to_char(void *data)
 {
-  //  std::string s = double2string(*(float *)data);
-  //  char *cast_data = new char[s.size() + 1];
-  //  memcpy(cast_data, s.c_str(), s.size());
-  //  return cast_data;
-  float &s = *(float *)data;
-  char *res = new char[33];
-  memset(res, 0, 33 * sizeof(char));
-  // sprintf(res, "%f", s);
-  gcvt(s, 7, res);
-  return res;
+    std::string s = double2string(*(float *)data);
+    char *cast_data = new char[s.size() + 1];
+    memset(cast_data, 0, s.size()+1);
+    memcpy(cast_data, s.c_str(), s.size());
+    return cast_data;
 }
 
 void *TypeCast::char_to_int(void *data)
 {
-  //  const char *s = (char *)data;
-  //  // atoi and atof function have already finished string like "12a" cast to 12 or "1.2a" cast to 1.2
-  //  int *cast_data = new int(atoi(s));
-  //  return cast_data;
-  char *s = (char *)data;
-  int *res = new int(atoi(s));
-  return res;
+    const char *s = (char *)data;
+    // atoi and atof function have already finished string like "12a" cast to 12 or "1.2a" cast to 1.2
+    int *cast_data = new int(atoi(s));
+    return cast_data;
 }
 
 void *TypeCast::char_to_float(void *data)
 {
-  char *s = (char *)data;
+  const char *s = (char *)data;
   float *res = new float(atof(s));
   return res;
 }
