@@ -295,6 +295,8 @@ IndexScanOperator *try_to_create_index_scan_operator(FilterStmt *filter_stmt)
     } else if (left->type() == ExprType::VALUE && right->type() == ExprType::FIELD) {
       std::swap(left, right);
     } else {
+      // if a condition expression like "value comp value" should continue and don't find the index;
+      // if a condition expression like "field comp filed" should continue and don't find the index;
       continue;
     }
     FieldExpr &left_field_expr = *(FieldExpr *)left;
