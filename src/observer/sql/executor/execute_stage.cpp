@@ -704,22 +704,6 @@ RC ExecuteStage::do_update(SQLStageEvent *sql_event)
   } else {
     session_event->set_response("SUCCESS\n");
     // Write the clog record,if it is the trx multiple operation mode
-    if (!session->is_trx_multi_operation_mode()) {
-      CLogRecord *clog_record = nullptr;
-      rc = clog_manager->clog_gen_record(CLogType::REDO_MTR_COMMIT, trx->get_current_id(), clog_record);
-      if (rc != RC::SUCCESS || clog_record == nullptr) {
-        session_event->set_response("FAILURE\n");
-        return rc;
-      }
-      rc = clog_manager->clog_append_record(clog_record);
-      if (rc != RC::SUCCESS) {
-        session_event->set_response("FAILURE\n");
-        return rc;
-      }
-      trx->next_current_id();
-      session_event->set_response("SUCCESS\n");
-    }
-  }
 }
 
 RC ExecuteStage::do_begin(SQLStageEvent *sql_event)
