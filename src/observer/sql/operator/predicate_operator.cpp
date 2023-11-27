@@ -17,6 +17,7 @@ See the Mulan PSL v2 for more details. */
 #include "storage/record/record.h"
 #include "sql/stmt/filter_stmt.h"
 #include "storage/common/field.h"
+#include "util/typecast.h"
 
 RC PredicateOperator::open()
 {
@@ -73,6 +74,24 @@ bool PredicateOperator::do_predicate(RowTuple &tuple)
     TupleCell right_cell;
     left_expr->get_value(tuple, left_cell);
     right_expr->get_value(tuple, right_cell);
+
+    // when compared, the expr type is different, should cast the type
+    // when left type is different from the right type, all cast it to float type to compare
+    AttrType left_type = left_cell.attr_type();
+    AttrType right_type = right_cell.attr_type();
+    float *left_temp_data = nullptr;
+    float *right_temp_data = nullptr;
+    if (left_type != right_type) {
+      std::unique_ptr<TypeCast> left_type_cast = std::make_unique<TypeCast>(left_type, FLOATS);
+      std::unique_ptr<TypeCast> right_type_cast = std::make_unique<TypeCast>(right_type, FLOATS);
+      left_temp_data = (float *)left_type_cast->cast((void *)left_cell.data());
+      right_temp_data = (float *)right_type_cast->cast((void *)right_cell.data());
+      // reset the float data
+      left_cell.set_data((char *)left_temp_data);
+      left_cell.set_type(FLOATS);
+      right_cell.set_data((char *)right_temp_data);
+      right_cell.set_type(FLOATS);
+    }
 
     const int compare = left_cell.compare(right_cell);
     bool filter_result = false;

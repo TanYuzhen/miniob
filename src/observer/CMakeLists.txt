@@ -17,7 +17,12 @@ MESSAGE("MAIN SRC: " ${MAIN_SRC})
 FOREACH (F ${ALL_SRC})
 
     IF (NOT ${F} STREQUAL ${MAIN_SRC})
-        SET(LIB_SRC ${LIB_SRC} ${F})
+        SET(LIB_SRC ${LIB_SRC} ${F}
+                sql/operator/update_operator.h
+                sql/operator/update_operator.cpp
+                sql/operator/update_operator.cpp
+                util/typecast.cpp
+                util/typecast.h)
     ENDIF()
 
     MESSAGE("Use " ${F})

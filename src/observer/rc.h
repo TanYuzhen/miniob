@@ -379,6 +379,7 @@ enum RC {
   /* clog buffer part */
   LOGBUF_FULL = (LOGBUF | (RCLOGBUF::LB_FULL << 8)),
   LOGBUF_EMPTY = (LOGBUF | (RCLOGBUF::LB_EMPTY << 8)),
+  FILE_END,
 };
 
 extern const char *strrc(RC rc);

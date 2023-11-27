@@ -245,7 +245,6 @@ RC DiskBufferPool::close_file()
   //  file_desc_ = -1;
   //  bp_manager_.close_file(file_name_.c_str());
   bp_manager_.close_file(file_name_.c_str());
-  file_desc_ = -1;
   return RC::SUCCESS;
 }
 
@@ -587,6 +586,10 @@ int DiskBufferPool::file_desc() const
 {
   return file_desc_;
 }
+void DiskBufferPool::set_file_decs()
+{
+  this->file_desc_ = -1;
+}
 ////////////////////////////////////////////////////////////////////////////////
 BufferPoolManager::BufferPoolManager()
 {
@@ -684,6 +687,7 @@ RC BufferPoolManager::close_file(const char *_file_name)
   fd_buffer_pools_.erase(fd);
 
   DiskBufferPool *bp = iter->second;
+  bp->set_file_decs();  // set file desc to -1
   buffer_pools_.erase(iter);
   delete bp;
   return RC::SUCCESS;

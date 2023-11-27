@@ -284,6 +284,7 @@ public:
   RC check_all_pages_unpinned();
 
   int file_desc() const;
+  void set_file_decs();
 
   /**
    * 如果页面是脏的，就将数据刷新到磁盘
@@ -309,7 +310,6 @@ protected:
    */
   RC purge_frame(PageNum page_num, Frame *used_frame);
   RC check_page_num(PageNum page_num);
-
   /**
    * 加载指定页面的数据到内存中
    */

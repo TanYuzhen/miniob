@@ -31,6 +31,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/index_scan_operator.h"
 #include "sql/operator/predicate_operator.h"
 #include "sql/operator/delete_operator.h"
+#include "sql/operator/update_operator.h"
 #include "sql/operator/project_operator.h"
 #include "sql/stmt/stmt.h"
 #include "sql/stmt/select_stmt.h"
@@ -144,6 +145,7 @@ void ExecuteStage::handle_request(common::StageEvent *event)
       } break;
       case StmtType::UPDATE: {
         // do_update((UpdateStmt *)stmt, session_event);
+        do_update(sql_event);
       } break;
       case StmtType::DELETE: {
         do_delete(sql_event);
@@ -357,6 +359,12 @@ IndexScanOperator *try_to_create_index_scan_operator(FilterStmt *filter_stmt)
   bool right_inclusive = false;
 
   switch (comp) {
+    // make every index filter form like : left <= value <= right
+    // so ==(EQUAL_TO) stands for value <= value <= value
+    //    <=(LESS_EQUAL) stands for nullptr < value <= value
+    //    <(LESS_THAN) stands for nullptr < value < value
+    //    >=(GREAT_EQUAL) stands for value <= value < nullptr
+    //    >(GREAT_THAN) stands for value < value < nullptr
     case EQUAL_TO: {
       left_cell = &value;
       right_cell = &value;
@@ -414,13 +422,16 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
     return rc;
   }
 
+  //  如果有索引，就建立索引进行扫描
   Operator *scan_oper = try_to_create_index_scan_operator(select_stmt->filter_stmt());
+  //  如果，没有索引，返回的scan_oper为nullptr，则进行全表扫描的操作
   if (nullptr == scan_oper) {
     scan_oper = new TableScanOperator(select_stmt->tables()[0]);
   }
 
   DEFER([&]() { delete scan_oper; });
 
+  //  算子的顺序：Project_operator-->Predict_operator-->Scan_operator/Index_scan_operator
   PredicateOperator pred_oper(select_stmt->filter_stmt());
   pred_oper.add_child(scan_oper);
   ProjectOperator project_oper;
@@ -437,8 +448,8 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
   std::stringstream ss;
   print_tuple_header(ss, project_oper);
   while ((rc = project_oper.next()) == RC::SUCCESS) {
-    // get current record
-    // write to response
+    //     get current record
+    //     write to response
     Tuple *tuple = project_oper.current_tuple();
     if (nullptr == tuple) {
       rc = RC::INTERNAL;
@@ -501,6 +512,18 @@ RC ExecuteStage::do_drop_table(SQLStageEvent *sqlStageEvent)
   if (nullptr != trx) {
     trx->delete_table(table);
   }
+  // delete the clog about the file
+  CLogMTRManager *mtr_manager = db->get_clog_manager()->get_mtr_manager();
+  for (auto it = mtr_manager->log_redo_list.begin(); it != mtr_manager->log_redo_list.end(); it++) {
+    CLogRecord *clog_record = *it;
+    std::string clog_table_name = clog_record->get_record()->ins.table_name_;
+    if (clog_table_name.compare(drop_table.relation_name)) {
+      mtr_manager->log_redo_list.erase(it++);
+    } else {
+      it++;
+    }
+  }
+  // drop table
   RC rc = db->drop_table(drop_table.relation_name);
   if (rc == RC::SUCCESS) {
     session_event->set_response("SUCCESS\n");
@@ -648,6 +671,55 @@ RC ExecuteStage::do_delete(SQLStageEvent *sql_event)
     }
   }
   return rc;
+}
+
+RC ExecuteStage::do_update(SQLStageEvent *sql_event)
+{
+  Stmt *stmt = sql_event->stmt();
+  SessionEvent *session_event = sql_event->session_event();
+  Session *session = session_event->session();
+  Db *db = session->get_current_db();
+  Trx *trx = session->current_trx();
+  CLogManager *clog_manager = db->get_clog_manager();
+
+  if (stmt == nullptr) {
+    LOG_WARN("cannot find statement");
+    return RC::GENERIC_ERROR;
+  }
+
+  UpdateStmt *update_stmt = (UpdateStmt *)sql_event->stmt();
+  Table *table = update_stmt->table();
+
+  // Construct The Operator Tree
+  TableScanOperator scan_operator(update_stmt->table());
+  PredicateOperator pred_operator(update_stmt->filter_stmt());
+  pred_operator.add_child(&scan_operator);
+  UpdateOperator update_operator(update_stmt, trx);
+  update_operator.add_child(&pred_operator);
+
+  // TODO::How to write the open function of update operator
+  RC rc = update_operator.open();
+  if (rc != RC::SUCCESS) {
+    session_event->set_response("FAILURE\n");
+  } else {
+    session_event->set_response("SUCCESS\n");
+    // Write the clog record,if it is the trx multiple operation mode
+    if (!session->is_trx_multi_operation_mode()) {
+      CLogRecord *clog_record = nullptr;
+      rc = clog_manager->clog_gen_record(CLogType::REDO_MTR_COMMIT, trx->get_current_id(), clog_record);
+      if (rc != RC::SUCCESS || clog_record == nullptr) {
+        session_event->set_response("FAILURE\n");
+        return rc;
+      }
+      rc = clog_manager->clog_append_record(clog_record);
+      if (rc != RC::SUCCESS) {
+        session_event->set_response("FAILURE\n");
+        return rc;
+      }
+      trx->next_current_id();
+      session_event->set_response("SUCCESS\n");
+    }
+  }
 }
 
 RC ExecuteStage::do_begin(SQLStageEvent *sql_event)

@@ -29,6 +29,7 @@ See the Mulan PSL v2 for more details. */
 #include "storage/index/bplus_tree_index.h"
 #include "storage/trx/trx.h"
 #include "storage/clog/clog.h"
+#include "util/typecast.h"
 
 Table::~Table()
 {
@@ -371,18 +372,21 @@ RC Table::make_record(int value_num, const Value *values, char *&record_out)
   }
 
   const int normal_field_start_index = table_meta_.sys_field_num();
-  for (int i = 0; i < value_num; i++) {
-    const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
-    const Value &value = values[i];
-    if (field->type() != value.type) {
-      LOG_ERROR("Invalid value type. table name =%s, field name=%s, type=%d, but given=%d",
-          table_meta_.name(),
-          field->name(),
-          field->type(),
-          value.type);
-      return RC::SCHEMA_FIELD_TYPE_MISMATCH;
-    }
-  }
+  //  for (int i = 0; i < value_num; i++) {
+  //    const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
+  //    const Value &value = values[i];
+  //    if (field->type() != value.type) {
+  //      LOG_ERROR("Invalid value type. table name =%s, field name=%s, type=%d, but given=%d",
+  //          table_meta_.name(),
+  //          field->name(),
+  //          field->type(),
+  //          value.type);
+  //      return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+  //      // cast value type there
+  //      std::unique_ptr<TypeCast> typeCast = std::make_unique<TypeCast>(value.type, field->type());
+  //      void * temp_data = typeCast->cast(value.data);
+  //    }
+  //  }
 
   // 复制所有字段的值
   int record_size = table_meta_.record_size();
@@ -392,13 +396,46 @@ RC Table::make_record(int value_num, const Value *values, char *&record_out)
     const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
     const Value &value = values[i];
     size_t copy_len = field->len();
+    void *temp_data = nullptr;
+    if (field->type() != value.type) {
+      // should cast type here
+      std::unique_ptr<TypeCast> type_cast = std::make_unique<TypeCast>(value.type, field->type());
+      temp_data = type_cast->cast(value.data);
+      if (temp_data == nullptr) {
+        LOG_ERROR("Invalid value type. table name =%s, field name=%s, type=%d, but given=%d",
+            table_meta_.name(),
+            field->name(),
+            field->type(),
+            value.type);
+        return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+      }
+    } else {
+      temp_data = value.data;
+    }
     if (field->type() == CHARS) {
-      const size_t data_len = strlen((const char *)value.data);
+      const size_t data_len = strlen((const char *)temp_data);
       if (copy_len > data_len) {
         copy_len = data_len + 1;
       }
     }
-    memcpy(record + field->offset(), value.data, copy_len);
+    memcpy(record + field->offset(), temp_data, copy_len);
+    // free the memory place
+    if (temp_data != nullptr) {
+      switch (field->type()) {
+        case INTS:
+          delete (int *)temp_data;
+          break;
+        case FLOATS:
+          delete (float *)temp_data;
+          break;
+        case CHARS:
+          delete (char *)temp_data;
+          break;
+        default:
+          LOG_ERROR("Delete TypeCast Data Error in table.cpp");
+          break;
+      }
+    }
   }
 
   record_out = record;
@@ -674,6 +711,86 @@ RC Table::update_record(Trx *trx, const char *attribute_name, const Value *value
     const Condition conditions[], int *updated_count)
 {
   return RC::GENERIC_ERROR;
+}
+
+RC Table::update_record(Trx *trx, Record *record, Value *value, const char *attribute_name)
+{
+  // TODO:Update the record
+  RC rc = RC::SUCCESS;
+  // Firstly, Get the offset and sys_offset of the update filed
+  // Get the update filed offset and length
+  int filed_offset = -1;
+  int filed_length = -1;
+  int sys_filed_num = this->table_meta_.sys_field_num();
+  int filed_num = this->table_meta_.field_num();
+  int visible_filed_num = filed_num - sys_filed_num;
+  for (int i = 0; i < visible_filed_num; i++) {
+    const FieldMeta *filed = this->table_meta_.field(sys_filed_num + i);
+    if (strcmp(filed->name(), attribute_name) == 0) {
+      // Already find the update filed;
+      filed_offset = filed->offset();
+      filed_length = filed->len();
+      break;
+    }
+  }
+  // If update value is same with the old value, so warn duplicate value
+  if (memcmp(record->data() + filed_offset, value->data, filed_length) == 0) {
+    LOG_WARN("in update , the value is same with the old value , duplicate value");
+    return RC::RECORD_DUPLICATE_KEY;
+  }
+  // Then, update the index value
+  char *old_data = record->data();
+  int record_size = this->table_meta_.record_size();
+  char *new_data = new char[record_size];
+  memcpy(new_data, old_data, record_size);
+  memcpy(new_data + filed_offset, value->data, filed_length);
+  record->set_data(new_data);
+  if (find_index_by_field(attribute_name) != nullptr) {
+    // delete the old index
+    rc = delete_entry_of_indexes(old_data, record->rid(), false);
+    if (rc != RC::SUCCESS) {
+      LOG_ERROR("Failed to delete indexes of record (rid=%d.%d). rc=%d:%s",
+          record->rid().page_num,
+          record->rid().slot_num,
+          rc,
+          strrc(rc));
+      return rc;
+    }
+    // insert the new update index
+    rc = insert_entry_of_indexes(record->data(), record->rid());
+    if (rc != RC::SUCCESS) {
+      LOG_ERROR("Failed to insert a indexes of record (rid=%d.%d), when update a value. rc=%d:%s",
+          record->rid().page_num,
+          record->rid().slot_num,
+          rc,
+          strrc(rc));
+      RC rc2 = delete_entry_of_indexes(record->data(), record->rid(), true);
+      if (rc2 != RC::SUCCESS) {
+        LOG_ERROR("Failed to rollback index data when update index entries failed. table name=%s, rc=%d:%s",
+            name(),
+            rc2,
+            strrc(rc2));
+        return rc2;
+      }
+      return rc;
+    }
+  }
+  // Update the record in the physical page
+  rc = record_handler_->update_record(record);
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("In update,Failed to update record (rid=%d.%d). rc=%d:%s",
+        record->rid().page_num,
+        record->rid().slot_num,
+        rc,
+        strrc(rc));
+    return rc;
+  }
+  // Lastly, record the update operation clog
+  if (trx != nullptr) {
+    trx->update_record(this, record);
+    // TODO,In clog question we should finish the part
+  }
+  return rc;
 }
 
 class RecordDeleter {
