@@ -18,6 +18,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/seda/stage.h"
 #include "sql/parser/parse.h"
 #include "rc.h"
+#include "sql/operator/operator.h"
 
 class SQLStageEvent;
 class SessionEvent;
@@ -46,6 +47,7 @@ protected:
   RC do_show_tables(SQLStageEvent *sql_event);
   RC do_desc_table(SQLStageEvent *sql_event);
   RC do_select(SQLStageEvent *sql_event);
+  RC do_join(SelectStmt *select_stmt, Operator **result_op, std::vector<Operator *> &delete_operator);
   RC do_insert(SQLStageEvent *sql_event);
   RC do_delete(SQLStageEvent *sql_event);
   RC do_update(SQLStageEvent *sql_event);

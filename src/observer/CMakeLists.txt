@@ -22,7 +22,10 @@ FOREACH (F ${ALL_SRC})
                 sql/operator/update_operator.cpp
                 sql/operator/update_operator.cpp
                 util/typecast.cpp
-                util/typecast.h)
+                util/typecast.h
+                sql/operator/join_operator.h
+                sql/operator/join_operator.cpp
+                sql/operator/join_operator.cpp)
     ENDIF()
 
     MESSAGE("Use " ${F})

@@ -73,6 +73,8 @@ private:
   Expression *right_ = nullptr;
 };
 
+typedef std::vector<FilterUnit *> FilterUnits;
+
 class FilterStmt {
 public:
   FilterStmt() = default;

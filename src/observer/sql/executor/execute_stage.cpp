@@ -46,6 +46,7 @@ See the Mulan PSL v2 for more details. */
 #include "storage/common/condition_filter.h"
 #include "storage/trx/trx.h"
 #include "storage/clog/clog.h"
+#include "sql/operator/join_operator.h"
 
 using namespace common;
 
@@ -271,10 +272,9 @@ void tuple_to_string(std::ostream &os, const Tuple &tuple)
     cell.to_string(os);
   }
 }
-
-IndexScanOperator *try_to_create_index_scan_operator(FilterStmt *filter_stmt)
+IndexScanOperator *try_to_create_index_scan_operator(const FilterUnits &filter_units)
 {
-  const std::vector<FilterUnit *> &filter_units = filter_stmt->filter_units();
+  //  const std::vector<FilterUnit *> &filter_units = filter_stmt->filter_units();
   if (filter_units.empty()) {
     return nullptr;
   }
@@ -415,33 +415,118 @@ IndexScanOperator *try_to_create_index_scan_operator(FilterStmt *filter_stmt)
   return oper;
 }
 
+std::unordered_map<Table *, std::unique_ptr<FilterUnits>> split_filters(
+    const std::vector<Table *> &tables, FilterStmt *filter_stmt)
+{
+  // Get the filterunits of every own table
+  std::unordered_map<Table *, std::unique_ptr<FilterUnits>> result;
+  for (auto table : tables) {
+    result[table] = std::make_unique<FilterUnits>();
+  }
+  for (auto filter : filter_stmt->filter_units()) {
+    Expression *left = filter->left();
+    Expression *right = filter->right();
+    if (ExprType::FIELD == left->type() && ExprType::VALUE == right->type()) {
+    } else if (ExprType::FIELD == right->type() && ExprType::VALUE == left->type()) {
+      std::swap(left, right);
+    } else {
+      continue;
+    }
+    // TODO: NEED TO CONSIDER SUB_QUERY
+    assert(ExprType::FIELD == left->type() && ExprType::VALUE == right->type());
+    auto &left_filed_expr = *dynamic_cast<FieldExpr *>(left);
+    const Field &field = left_filed_expr.field();
+    result[const_cast<Table *>(field.table())]->emplace_back(filter);
+  }
+  return result;
+}
+RC ExecuteStage::do_join(SelectStmt *select_stmt, Operator **result_op, std::vector<Operator *> &delete_operator)
+{
+  std::list<Operator *> operator_list;
+  const auto &tables = select_stmt->tables();
+  FilterStmt *filter_stmt = select_stmt->filter_stmt();
+  auto table_filter_units = split_filters(tables, filter_stmt);
+  for (size_t i = 0; i < tables.size(); i++) {
+    Operator *scan_operator = try_to_create_index_scan_operator(*table_filter_units[tables[i]]);
+    if (nullptr == scan_operator) {
+      scan_operator = new TableScanOperator(tables[i]);
+      // the table is tn,tn-1,tn-2,......,t3,t2,t1
+      // so we should put it on the front of operator list
+    }
+    operator_list.push_front(scan_operator);
+    delete_operator.push_back(scan_operator);
+  }
+  // the structure like this:
+  //                  join_operator
+  //                //             \\
+  //            scan_operator  scan_operator
+  while (operator_list.size() > 1) {
+    JoinOperator *join_oper = nullptr;
+    Operator *left_oper = nullptr;
+    Operator *right_oper = nullptr;
+
+    left_oper = operator_list.front();
+    operator_list.pop_front();
+    right_oper = operator_list.front();
+    operator_list.pop_front();
+
+    join_oper = new JoinOperator(left_oper, right_oper);
+    operator_list.push_front(join_oper);
+  }
+  *result_op = operator_list.front();
+  operator_list.pop_front();
+  return RC::SUCCESS;
+}
+
 RC ExecuteStage::do_select(SQLStageEvent *sql_event)
 {
   SelectStmt *select_stmt = (SelectStmt *)(sql_event->stmt());
   SessionEvent *session_event = sql_event->session_event();
   RC rc = RC::SUCCESS;
-  if (select_stmt->tables().size() != 1) {
-    LOG_WARN("select more than 1 tables is not supported");
-    rc = RC::UNIMPLENMENT;
-    return rc;
+  // TODO:Here support more than one table select
+  //
+  //  if (select_stmt->tables().size() != 1) {
+  //    LOG_WARN("select more than 1 tables is not supported");
+  //    rc = RC::UNIMPLENMENT;
+  //    return rc;
+  //  }
+  //
+  //  //  如果有索引，就建立索引进行扫描
+  //  Operator *scan_oper = try_to_create_index_scan_operator(select_stmt->filter_stmt()->filter_units());
+  //  //  如果，没有索引，返回的scan_oper为nullptr，则进行全表扫描的操作
+  //  if (nullptr == scan_oper) {
+  //    scan_oper = new TableScanOperator(select_stmt->tables()[0]);
+  //  }
+  //
+  //  DEFER([&]() { delete scan_oper; });
+  bool is_single = true;
+  std::vector<Operator *> delete_operator;
+  Operator *scan_oper = nullptr;
+  if (select_stmt->tables().size() > 1) {
+    rc = do_join(select_stmt, &scan_oper, delete_operator);
+    is_single = false;
+  } else {
+    scan_oper = try_to_create_index_scan_operator(select_stmt->filter_stmt()->filter_units());
+    if (nullptr == scan_oper) {
+      scan_oper = new TableScanOperator(select_stmt->tables()[0]);
+    }
+    delete_operator.push_back(scan_oper);
   }
 
-  //  如果有索引，就建立索引进行扫描
-  Operator *scan_oper = try_to_create_index_scan_operator(select_stmt->filter_stmt());
-  //  如果，没有索引，返回的scan_oper为nullptr，则进行全表扫描的操作
-  if (nullptr == scan_oper) {
-    scan_oper = new TableScanOperator(select_stmt->tables()[0]);
-  }
-
-  DEFER([&]() { delete scan_oper; });
+  DEFER([&]() {
+    for (auto del : delete_operator) {
+      delete del;
+    }
+  });
 
   //  算子的顺序：Project_operator-->Predict_operator-->Scan_operator/Index_scan_operator
   PredicateOperator pred_oper(select_stmt->filter_stmt());
   pred_oper.add_child(scan_oper);
   ProjectOperator project_oper;
   project_oper.add_child(&pred_oper);
-  for (const Field &field : select_stmt->query_fields()) {
-    project_oper.add_projection(field.table(), field.meta());
+  auto &field = select_stmt->query_fields();
+  for (auto it = field.begin(); it != field.end(); it++) {
+    project_oper.add_projection(it->table(), it->meta(), is_single);
   }
   rc = project_oper.open();
   if (rc != RC::SUCCESS) {

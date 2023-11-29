@@ -68,6 +68,11 @@ public:
   virtual RC find_cell(const Field &field, TupleCell &cell) const = 0;
 
   virtual RC cell_spec_at(int index, const TupleCellSpec *&spec) const = 0;
+
+  // add new virtual function
+  virtual void get_record(JoinRecord &join_record) const = 0;
+  virtual void set_record(JoinRecord &join_record) = 0;
+  virtual void set_right_record(JoinRecord &join_record) = 0;
 };
 
 class RowTuple : public Tuple {
@@ -154,6 +159,25 @@ public:
     return *record_;
   }
 
+  // add new function
+  void set_record(JoinRecord &join_record) override
+  {
+    assert(join_record.size() >= 1);
+    this->record_ = join_record.front();
+    join_record.erase(join_record.begin());
+  }
+
+  void set_right_record(JoinRecord &join_record) override
+  {
+    assert(!join_record.empty());
+    set_record(join_record);
+  }
+
+  void get_record(JoinRecord &join_record) const override
+  {
+    join_record.emplace_back(this->record_);
+  }
+
 private:
   Record *record_ = nullptr;
   const Table *table_ = nullptr;
@@ -223,7 +247,89 @@ public:
     return RC::SUCCESS;
   }
 
+  // add new function
+  void set_record(JoinRecord &join_record) override
+  {
+    tuple_->set_record(join_record);
+  }
+  void set_right_record(JoinRecord &join_record) override
+  {
+    tuple_->set_right_record(join_record);
+  }
+  void get_record(JoinRecord &join_record) const override
+  {
+    tuple_->get_record(join_record);
+  }
+
 private:
   std::vector<TupleCellSpec *> speces_;
   Tuple *tuple_ = nullptr;
+  // Different from RowTuple, Here ProjectTuple is a tuple_ and isn't a record_
+};
+
+class JoinTuple : public Tuple {
+public:
+  void init(Tuple *left_tuple, Tuple *right_tuple)
+  {
+    left_tuple_ = left_tuple;
+    right_tuple_ = right_tuple;
+  }
+  int cell_num() const override
+  {
+    return left_tuple_->cell_num() + right_tuple_->cell_num();
+  }
+  RC cell_at(int index, TupleCell &cell) const override
+  {
+    if (index < 0 || index >= cell_num()) {
+      LOG_WARN("invalid argument. index=%d", index);
+      return RC::INVALID_ARGUMENT;
+    }
+    // get left side cell num;
+    int num = left_tuple_->cell_num();
+    if (index < num) {
+      return left_tuple_->cell_at(index, cell);
+    }
+    // get from right table by id values of (index - num)
+    return right_tuple_->cell_at(index - num, cell);
+  }
+  RC find_cell(const Field &field, TupleCell &cell) const override
+  {
+    if (left_tuple_->find_cell(field, cell) != RC::SUCCESS) {
+      return right_tuple_->find_cell(field, cell);
+    }
+    return RC::SUCCESS;
+  }
+  RC cell_spec_at(int index, const TupleCellSpec *&spec) const override
+  {
+    if (index < 0 || index >= cell_num()) {
+      LOG_WARN("invalid argument. index=%d", index);
+      return RC::INVALID_ARGUMENT;
+    }
+    int num = left_tuple_->cell_num();
+    if (index < num) {
+      return left_tuple_->cell_spec_at(index, spec);
+    }
+    return right_tuple_->cell_spec_at(index - num, spec);
+  }
+
+  // add new function
+  void set_record(JoinRecord &join_record) override
+  {
+    left_tuple_->set_record(join_record);
+    right_tuple_->set_record(join_record);
+  }
+  void set_right_record(JoinRecord &join_record) override
+  {
+    right_tuple_->set_right_record(join_record);
+    assert(join_record.empty());
+  }
+  void get_record(JoinRecord &join_record) const override
+  {
+    left_tuple_->get_record(join_record);
+    right_tuple_->get_record(join_record);
+  }
+
+private:
+  Tuple *left_tuple_;
+  Tuple *right_tuple_;
 };
