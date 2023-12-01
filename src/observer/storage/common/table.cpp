@@ -353,6 +353,23 @@ RC Table::insert_record(Trx *trx, int value_num, const Value *values)
   return rc;
 }
 
+RC Table::insert_record(Trx *trx, int value_num, std::vector<Row> *rows)
+{
+  if (value_num < 0 || rows == nullptr) {
+    LOG_ERROR("Cause invalid argument, Failed to insert more than one record");
+    return RC::INVALID_ARGUMENT;
+  }
+  RC rc;
+  for (int i = 0; i < rows->size(); i++) {
+    rc = insert_record(trx, value_num, (*(rows))[i].values);
+    if (rc != RC::SUCCESS) {
+      LOG_ERROR("Insert more than one record error");
+      return rc;
+    }
+  }
+  return rc;
+}
+
 const char *Table::name() const
 {
   return table_meta_.name();

@@ -58,6 +58,8 @@ public:
   RC open(const char *meta_file, const char *base_dir, CLogManager *clog_manager);
 
   RC insert_record(Trx *trx, int value_num, const Value *values);
+  // insert more than one record use the flow function
+  RC insert_record(Trx *trx, int value_num, std::vector<Row> *rows);
   RC update_record(Trx *trx, const char *attribute_name, const Value *value, int condition_num,
       const Condition conditions[], int *updated_count);
   RC update_record(Trx *trx, Record *record, Value *value, const char *attribute_name);

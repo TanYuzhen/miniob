@@ -20,6 +20,9 @@ See the Mulan PSL v2 for more details. */
 InsertStmt::InsertStmt(Table *table, const Value *values, int value_amount)
     : table_(table), values_(values), value_amount_(value_amount)
 {}
+InsertStmt::InsertStmt(Table *table, std::vector<Row> rows, int value_amount)
+    : table_(table), rows_(rows), value_amount_(value_amount)
+{}
 
 RC InsertStmt::create(Db *db, const Inserts &inserts, Stmt *&stmt)
 {
@@ -37,7 +40,8 @@ RC InsertStmt::create(Db *db, const Inserts &inserts, Stmt *&stmt)
   }
 
   // check the fields number
-  const Value *values = inserts.values;
+  const int row_num = inserts.row_num;
+  //  const Value *values = inserts.values;
   const int value_num = inserts.value_num;
   const TableMeta &table_meta = table->table_meta();
   const int field_num = table_meta.field_num() - table_meta.sys_field_num();
@@ -62,7 +66,14 @@ RC InsertStmt::create(Db *db, const Inserts &inserts, Stmt *&stmt)
   //    }
   //  }
 
+  std::vector<Row> rows;
+  for (int i = 0; i < inserts.row_num; i++) {
+    Row row;
+    const Value *values = inserts.values[i];
+    row.values = values;
+    rows.push_back(row);
+  }
   // everything alright
-  stmt = new InsertStmt(table, values, value_num);
+  stmt = new InsertStmt(table, rows, value_num);
   return RC::SUCCESS;
 }

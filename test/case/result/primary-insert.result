@@ -12,7 +12,7 @@ SUCCESS
 INSERT INTO insert_table VALUES (4,'N4',1,1),(1,1,1);
 FAILURE
 INSERT INTO insert_table VALUES (4,'N4',1,1),(1,1,1,1);
-FAILURE
+SUCCESS
 
 3. SELECT
 SELECT * FROM insert_table;
