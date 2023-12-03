@@ -68,6 +68,11 @@ public:
     return field_.field_name();
   }
 
+  const Table *table() const
+  {
+    return field_.table();
+  }
+
   RC get_value(const Tuple &tuple, TupleCell &cell) const override;
 
 private:

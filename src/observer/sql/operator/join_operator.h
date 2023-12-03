@@ -17,6 +17,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/parser/parse.h"
 #include "sql/operator/operator.h"
 #include "rc.h"
+#include "sql/stmt/filter_stmt.h"
 
 // TODO fixme
 class JoinOperator : public Operator {
@@ -31,6 +32,11 @@ public:
   RC close() override;
   Tuple *current_tuple() override;
   RC fetch_the_right_data();
+  void filter_data();
+  void add_filter(FilterUnit *filter_unit)
+  {
+    filter_units_.emplace_back(filter_unit);
+  }
 
 private:
   Operator *left_ = nullptr;
@@ -39,4 +45,7 @@ private:
   JoinTuple tuple_;
   std::vector<JoinRecord> right_table_data_;
   std::vector<JoinRecord>::iterator right_table_data_position_;
+  std::vector<FilterUnit *> filter_units_;
+  std::vector<int> filter_index_;
+  std::vector<int>::iterator filter_index_it_;
 };

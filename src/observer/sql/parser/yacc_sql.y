@@ -93,6 +93,8 @@ ParserContext *get_context(yyscan_t scanner)
         WHERE
         AND
         SET
+        INNER
+        JOIN
         ON
         LOAD
         DATA
@@ -428,6 +430,14 @@ rel_list:
     | COMMA ID rel_list {	
 				selects_append_relation(&CONTEXT->ssql->sstr.selection, $2);
 		  }
+    | INNER JOIN ID inner_join_condition_lists rel_list {
+                selects_append_relation(&CONTEXT->ssql->sstr.selection, $3);
+          }
+    ;
+inner_join_condition_lists:
+    | ON condition condition_list {
+
+         }
     ;
 where:
     /* empty */ 

@@ -444,11 +444,14 @@ std::unordered_map<Table *, std::unique_ptr<FilterUnits>> split_filters(
 RC ExecuteStage::do_join(SelectStmt *select_stmt, Operator **result_op, std::vector<Operator *> &delete_operator)
 {
   std::list<Operator *> operator_list;
+  std::unordered_set<const Table *> table_set;  // To change the filter Units
+  std::list<const Table *> table_list;          // To change the filter Units
   const auto &tables = select_stmt->tables();
   FilterStmt *filter_stmt = select_stmt->filter_stmt();
   auto table_filter_units = split_filters(tables, filter_stmt);
   for (size_t i = 0; i < tables.size(); i++) {
     Operator *scan_operator = try_to_create_index_scan_operator(*table_filter_units[tables[i]]);
+    table_list.push_front(tables[i]);
     if (nullptr == scan_operator) {
       scan_operator = new TableScanOperator(tables[i]);
       // the table is tn,tn-1,tn-2,......,t3,t2,t1
@@ -461,6 +464,8 @@ RC ExecuteStage::do_join(SelectStmt *select_stmt, Operator **result_op, std::vec
   //                  join_operator
   //                //             \\
   //            scan_operator  scan_operator
+  table_set.insert(table_list.front());
+  table_list.pop_front();  // get the first join table of the select SQL to change the filter units
   while (operator_list.size() > 1) {
     JoinOperator *join_oper = nullptr;
     Operator *left_oper = nullptr;
@@ -471,8 +476,34 @@ RC ExecuteStage::do_join(SelectStmt *select_stmt, Operator **result_op, std::vec
     right_oper = operator_list.front();
     operator_list.pop_front();
 
+    table_set.insert(table_list.front());
+    table_list.pop_front();  // get the join table of the select SQL to change the filter units
+
     join_oper = new JoinOperator(left_oper, right_oper);
     operator_list.push_front(join_oper);
+
+    auto &filter_units = filter_stmt->filter_units();
+    for (auto it = filter_units.begin(); it != filter_units.end();) {
+      FilterUnit *filter_unit = *it;
+      Expression *left_expr = filter_unit->left();
+      Expression *right_expr = filter_unit->right();
+      bool belong_to = true;
+      if (left_expr->type() == ExprType::FIELD && (table_set.count(((FieldExpr *)left_expr)->table()) == 0)) {
+        // now the filter isn't belonged to the JoinOperator;
+        belong_to = false;
+      }
+      if (right_expr->type() == ExprType::FIELD && (table_set.count(((FieldExpr *)right_expr)->table()) == 0)) {
+        // now the filter isn't belonged to the JoinOperator;
+        belong_to = false;
+      }
+      if (belong_to) {
+        // now the filter is belonged to the JoinOperator;
+        join_oper->add_filter(filter_unit);
+        it = filter_units.erase(it);
+      } else {
+        it++;
+      }
+    }
   }
   *result_op = operator_list.front();
   operator_list.pop_front();

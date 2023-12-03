@@ -85,26 +85,28 @@ enum yytokentype {
   WHERE = 287,        /* WHERE  */
   AND = 288,          /* AND  */
   SET = 289,          /* SET  */
-  ON = 290,           /* ON  */
-  LOAD = 291,         /* LOAD  */
-  DATA = 292,         /* DATA  */
-  INFILE = 293,       /* INFILE  */
-  EQ = 294,           /* EQ  */
-  LT = 295,           /* LT  */
-  GT = 296,           /* GT  */
-  LE = 297,           /* LE  */
-  GE = 298,           /* GE  */
-  NE = 299,           /* NE  */
-  NOT = 300,          /* NOT  */
-  LIKE = 301,         /* LIKE  */
-  NUMBER = 302,       /* NUMBER  */
-  FLOAT = 303,        /* FLOAT  */
-  ID = 304,           /* ID  */
-  PATH = 305,         /* PATH  */
-  SSS = 306,          /* SSS  */
-  STAR = 307,         /* STAR  */
-  STRING_V = 308,     /* STRING_V  */
-  DATE_STR = 309      /* DATE_STR  */
+  INNER = 290,        /* INNER  */
+  JOIN = 291,         /* JOIN  */
+  ON = 292,           /* ON  */
+  LOAD = 293,         /* LOAD  */
+  DATA = 294,         /* DATA  */
+  INFILE = 295,       /* INFILE  */
+  EQ = 296,           /* EQ  */
+  LT = 297,           /* LT  */
+  GT = 298,           /* GT  */
+  LE = 299,           /* LE  */
+  GE = 300,           /* GE  */
+  NE = 301,           /* NE  */
+  NOT = 302,          /* NOT  */
+  LIKE = 303,         /* LIKE  */
+  NUMBER = 304,       /* NUMBER  */
+  FLOAT = 305,        /* FLOAT  */
+  ID = 306,           /* ID  */
+  PATH = 307,         /* PATH  */
+  SSS = 308,          /* SSS  */
+  STAR = 309,         /* STAR  */
+  STRING_V = 310,     /* STRING_V  */
+  DATE_STR = 311      /* DATE_STR  */
 };
 typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -112,7 +114,7 @@ typedef enum yytokentype yytoken_kind_t;
 /* Value type.  */
 #if !defined YYSTYPE && !defined YYSTYPE_IS_DECLARED
 union YYSTYPE {
-#line 109 "yacc_sql.y"
+#line 111 "yacc_sql.y"
 
   struct _Attr *attr;
   struct _Condition *condition1;
@@ -122,7 +124,7 @@ union YYSTYPE {
   float floats;
   char *position;
 
-#line 128 "yacc_sql.tab.h"
+#line 130 "yacc_sql.tab.h"
 };
 typedef union YYSTYPE YYSTYPE;
 #define YYSTYPE_IS_TRIVIAL 1
