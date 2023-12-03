@@ -367,6 +367,7 @@ RC Table::insert_record(Trx *trx, int value_num, std::vector<Row> *rows)
       return rc;
     }
   }
+  (*rows).clear();
   return rc;
 }
 

@@ -19,6 +19,7 @@ See the Mulan PSL v2 for more details. */
 #include "storage/common/field.h"
 #include "util/typecast.h"
 #include "common/lang/defer.h"
+#include <regex>
 
 RC PredicateOperator::open()
 {
@@ -80,6 +81,29 @@ bool PredicateOperator::do_predicate(RowTuple &tuple)
     // when left type is different from the right type, all cast it to float type to compare
     AttrType left_type = left_cell.attr_type();
     AttrType right_type = right_cell.attr_type();
+
+    if (comp == LIKE_OP || comp == NOT_LIKE_OP) {
+      assert(left_type == CHARS && right_type == CHARS);
+      std::string regex_string(right_cell.data());
+      size_t found = regex_string.find('%');
+      while (found != std::string::npos) {
+        regex_string.replace(found, 1, "[^']*");
+        found = regex_string.find('%', found + 1);
+      }
+      found = regex_string.find('_');
+      while (found != std::string::npos) {
+        regex_string.replace(found, 1, "[^']");
+        found = regex_string.find('_', found + 1);
+      }
+      std::regex reg(regex_string.c_str(), std::regex_constants::ECMAScript | std::regex_constants::icase);
+      bool result = std::regex_match(left_cell.data(), reg);
+      if ((result && comp == LIKE_OP) || (!result && comp == NOT_LIKE_OP)) {
+        continue;
+      } else {
+        return false;
+      }
+    }
+
     float *left_temp_data = nullptr;
     float *right_temp_data = nullptr;
     DEFER([&]() {
