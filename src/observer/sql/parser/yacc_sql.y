@@ -149,7 +149,8 @@ command:
 	| drop_table
 	| show_tables
 	| desc_table
-	| create_index	
+	| create_index
+	| show_index
 	| drop_index
 	| sync
 	| begin
@@ -219,6 +220,14 @@ create_index:		/*create index 语句的语法解析树*/
 			CONTEXT->ssql->flag = SCF_CREATE_INDEX;//"create_index";
 			create_index_init(&CONTEXT->ssql->sstr.create_index, $3, $5, $7);
 		}
+    ;
+
+show_index:
+    SHOW INDEX FROM ID SEMICOLON
+        {
+            CONTEXT->ssql->flag = SCF_SHOW_INDEX;
+            desc_table_init(&CONTEXT->ssql->sstr.desc_table, $4);
+        }
     ;
 
 drop_index:			/*drop index 语句的语法解析树*/

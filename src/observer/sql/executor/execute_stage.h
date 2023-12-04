@@ -45,6 +45,7 @@ protected:
   RC do_drop_table(SQLStageEvent *sqlStageEvent);
   RC do_create_index(SQLStageEvent *sql_event);
   RC do_show_tables(SQLStageEvent *sql_event);
+  RC do_show_index(SQLStageEvent *sql_event);
   RC do_desc_table(SQLStageEvent *sql_event);
   RC do_select(SQLStageEvent *sql_event);
   RC do_join(SelectStmt *select_stmt, Operator **result_op, std::vector<Operator *> &delete_operator);
