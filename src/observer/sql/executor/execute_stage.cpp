@@ -699,6 +699,7 @@ RC ExecuteStage::do_show_index(SQLStageEvent *sql_event)
   std::stringstream ss;
   if (table == nullptr) {
     LOG_ERROR("Table Not exist, failed show index");
+    session_event->set_response("FAILURE\n");
     return RC::SCHEMA_TABLE_NOT_EXIST;
   } else {
     table->table_meta().show_index(ss);
