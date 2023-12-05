@@ -162,8 +162,18 @@ const IndexMeta *TableMeta::index(const char *name) const
 
 const IndexMeta *TableMeta::find_index_by_field(const char *field) const
 {
+  std::string field_name = field;
+  std::vector<std::string> field_names;
+  field_names.push_back(field_name);
+  return find_index_by_field(field_names);
+}
+
+const IndexMeta *TableMeta::find_index_by_field(std::vector<std::string> &field) const
+{
   for (const IndexMeta &index : indexes_) {
-    if (0 == strcmp(index.field(), field)) {
+    if (field == *index.field()) {
+      // notice that vector<string> a and vector<string> b can compare by each other
+      // if the string character is the same
       return &index;
     }
   }
@@ -330,7 +340,6 @@ void TableMeta::show_index(std::ostream &os) const
      << " | "
      << "Column_name" << std::endl;
   for (auto &it : this->indexes_) {
-    os << name_ << " | ";
-    it.show(os);
+    it.show(os, name_);
   }
 }

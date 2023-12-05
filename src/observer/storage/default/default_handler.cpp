@@ -163,7 +163,9 @@ RC DefaultHandler::create_index(
   if (nullptr == table) {
     return RC::SCHEMA_TABLE_NOT_EXIST;
   }
-  return table->create_index(trx, index_name, attribute_name);
+  AttrInfo attr_names[1];
+  attr_names[0].name = const_cast<char *>(attribute_name);
+  return table->create_index(trx, index_name, false, 1, attr_names);
 }
 
 RC DefaultHandler::drop_index(Trx *trx, const char *dbname, const char *relation_name, const char *index_name)

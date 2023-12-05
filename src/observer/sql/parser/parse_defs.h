@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 #define __OBSERVER_SQL_PARSER_PARSE_DEFS_H__
 
 #include <stddef.h>
+#include <stdbool.h>
 
 #define MAX_NUM 20
 #define MAX_REL_NAME 20
@@ -120,9 +121,12 @@ typedef struct {
 
 // struct of create_index
 typedef struct {
-  char *index_name;      // Index name
-  char *relation_name;   // Relation name
-  char *attribute_name;  // Attribute name
+  char *index_name;             // Index name
+  char *relation_name;          // Relation name
+                                //  char *attribute_name;  // Attribute name
+  bool unique;                  // whether unique index
+  int attr_count;               // multiple index
+  AttrInfo attribute[MAX_NUM];  // multiple index attribute
 } CreateIndex;
 
 // struct of  drop_index
@@ -227,8 +231,8 @@ void create_table_destroy(CreateTable *create_table);
 void drop_table_init(DropTable *drop_table, const char *relation_name);
 void drop_table_destroy(DropTable *drop_table);
 
-void create_index_init(
-    CreateIndex *create_index, const char *index_name, const char *relation_name, const char *attr_name);
+void create_index_init(CreateIndex *create_index, bool unique, const char *index_name, const char *relation_name);
+void create_index_append_attribute(CreateIndex *createIndex, const char *attr_name);
 void create_index_destroy(CreateIndex *create_index);
 
 void drop_index_init(DropIndex *drop_index, const char *index_name);

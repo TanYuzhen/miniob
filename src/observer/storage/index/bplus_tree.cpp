@@ -749,8 +749,8 @@ RC BplusTreeHandler::sync()
   return disk_buffer_pool_->flush_all_pages();
 }
 
-RC BplusTreeHandler::create(const char *file_name, AttrType attr_type, int attr_length, int internal_max_size /* = -1*/,
-    int leaf_max_size /* = -1 */)
+RC BplusTreeHandler::create(const char *file_name, std::vector<AttrType> &attr_type, std::vector<int> &attr_length,
+    std::vector<int> &attr_offset, int internal_max_size, int leaf_max_size)
 {
   BufferPoolManager &bpm = BufferPoolManager::instance();
   RC rc = bpm.create_file(file_name);
@@ -785,18 +785,27 @@ RC BplusTreeHandler::create(const char *file_name, AttrType attr_type, int attr_
     return RC::INTERNAL;
   }
 
+  int index_attr_len_sum = 0;
+  for (int i = 0; i < attr_length.size(); i++) {
+    index_attr_len_sum = index_attr_len_sum + attr_length[i];
+  }
+
   if (internal_max_size < 0) {
-    internal_max_size = calc_internal_page_capacity(attr_length);
+    internal_max_size = calc_internal_page_capacity(index_attr_len_sum);
   }
   if (leaf_max_size < 0) {
-    leaf_max_size = calc_leaf_page_capacity(attr_length);
+    leaf_max_size = calc_leaf_page_capacity(index_attr_len_sum);
   }
 
   char *pdata = header_frame->data();
   IndexFileHeader *file_header = (IndexFileHeader *)pdata;
-  file_header->attr_length = attr_length;
-  file_header->key_length = attr_length + sizeof(RID);
-  file_header->attr_type = attr_type;
+  for (int i = 0; i < attr_length.size(); i++) {
+    file_header->attr_length[i] = attr_length[i];
+    file_header->attr_type[i] = attr_type[i];
+    file_header->attr_offset[i] = attr_offset[i];
+  }
+  file_header->attr_num = attr_length.size();
+  file_header->key_length = index_attr_len_sum + sizeof(RID);
   file_header->internal_max_size = internal_max_size;
   file_header->leaf_max_size = leaf_max_size;
   file_header->root_page = BP_INVALID_PAGE_NUM;
@@ -816,8 +825,8 @@ RC BplusTreeHandler::create(const char *file_name, AttrType attr_type, int attr_
     return RC::NOMEM;
   }
 
-  key_comparator_.init(file_header->attr_type, file_header->attr_length);
-  key_printer_.init(file_header->attr_type, file_header->attr_length);
+  key_comparator_.init(attr_type, attr_length);
+  key_printer_.init(attr_type, attr_length);
   LOG_INFO("Successfully create index %s", file_name);
   return RC::SUCCESS;
 }
@@ -860,8 +869,14 @@ RC BplusTreeHandler::open(const char *file_name)
   // close old page_handle
   disk_buffer_pool->unpin_page(frame);
 
-  key_comparator_.init(file_header_.attr_type, file_header_.attr_length);
-  key_printer_.init(file_header_.attr_type, file_header_.attr_length);
+  std::vector<AttrType> attr_type;
+  std::vector<int> attr_length;
+  for (int i = 0; i < file_header_.attr_num; i++) {
+    attr_type.push_back(file_header_.attr_type[i]);
+    attr_length.push_back(file_header_.attr_length[i]);
+  }
+  key_comparator_.init(attr_type, attr_length);
+  key_printer_.init(attr_type, attr_length);
   LOG_INFO("Successfully open index %s", file_name);
   return RC::SUCCESS;
 }
@@ -1379,8 +1394,12 @@ char *BplusTreeHandler::make_key(const char *user_key, const RID &rid)
     LOG_WARN("Failed to alloc memory for key.");
     return nullptr;
   }
-  memcpy(key, user_key, file_header_.attr_length);
-  memcpy(key + file_header_.attr_length, &rid, sizeof(rid));
+  int position = 0;
+  for (int i = 0; i < file_header_.attr_num; i++) {
+    memcpy(key + position, user_key + position, file_header_.attr_length[i]);
+    position = position + file_header_.attr_length[i];
+  }
+  memcpy(key + position, &rid, sizeof(rid));
   return key;
 }
 
@@ -1425,6 +1444,8 @@ RC BplusTreeHandler::insert_entry(const char *user_key, const RID *rid)
     return rc;
   }
 
+  // Because in function insert_entry_into_leaf_node have copied the key to other value
+  // the key is double here, make the waste of memory, so we need to free the key here
   mem_pool_item_->free(key);
   LOG_TRACE("insert entry success");
   // disk_buffer_pool_->check_all_pages_unpinned(file_id_);
@@ -1681,8 +1702,14 @@ RC BplusTreeHandler::delete_entry(const char *user_key, const RID *rid)
     LOG_WARN("Failed to alloc memory for key. size=%d", file_header_.key_length);
     return RC::NOMEM;
   }
-  memcpy(key, user_key, file_header_.attr_length);
-  memcpy(key + file_header_.attr_length, rid, sizeof(*rid));
+  int position = 0;
+  for (int i = 0; i < file_header_.attr_num; i++) {
+    // Because the b+ index delete entry function's parament is record
+    // So there should be an attr_offset, not attr_length
+    memcpy(key + position, user_key + file_header_.attr_offset[i], file_header_.attr_length[i]);
+    position = position + file_header_.attr_length[i];
+  }
+  memcpy(key + position, rid, sizeof(*rid));
 
   Frame *leaf_frame;
   RC rc = find_leaf(key, leaf_frame);
@@ -1743,7 +1770,7 @@ RC BplusTreeScanner::open(const char *left_user_key, int left_len, bool left_inc
     char *left_key = nullptr;
 
     char *fixed_left_key = const_cast<char *>(left_user_key);
-    if (tree_handler_.file_header_.attr_type == CHARS) {
+    if (tree_handler_.file_header_.attr_type[0] == CHARS) {
       bool should_inclusive_after_fix = false;
       rc = fix_user_key(left_user_key, left_len, true /*greater*/, &fixed_left_key, &should_inclusive_after_fix);
       if (rc != RC::SUCCESS) {
@@ -1810,7 +1837,7 @@ RC BplusTreeScanner::open(const char *left_user_key, int left_len, bool left_inc
     char *right_key = nullptr;
     char *fixed_right_key = const_cast<char *>(right_user_key);
     bool should_include_after_fix = false;
-    if (tree_handler_.file_header_.attr_type == CHARS) {
+    if (tree_handler_.file_header_.attr_type[0] == CHARS) {
       rc = fix_user_key(right_user_key, right_len, false /*want_greater*/, &fixed_right_key, &should_include_after_fix);
       if (rc != RC::SUCCESS) {
         LOG_WARN("failed to fix right user key. rc=%s", strrc(rc));
@@ -1953,12 +1980,12 @@ RC BplusTreeScanner::fix_user_key(
   }
 
   // 这里很粗暴，变长字段才需要做调整，其它默认都不需要做调整
-  assert(tree_handler_.file_header_.attr_type == CHARS);
+  assert(tree_handler_.file_header_.attr_type[0] == CHARS);
   assert(strlen(user_key) >= static_cast<size_t>(key_len));
 
   *should_inclusive = false;
 
-  int32_t attr_length = tree_handler_.file_header_.attr_length;
+  int32_t attr_length = tree_handler_.file_header_.attr_length[0];
   char *key_buf = new (std::nothrow) char[attr_length];
   if (nullptr == key_buf) {
     return RC::NOMEM;
