@@ -44,7 +44,7 @@ typedef enum {
 
 //属性值类型
 typedef enum { NO_EXP_OP, ADD_OP, SUB_OP, MUL_OP, DIV_OP, EXP_OP_NUM } ExpOp;
-typedef enum { UNDEFINED, CHARS, INTS, DATE, FLOATS } AttrType;
+typedef enum { UNDEFINED, CHARS, INTS, DATE, NULLS, FLOATS } AttrType;
 
 //属性值
 typedef struct Value {

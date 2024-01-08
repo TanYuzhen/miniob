@@ -27,6 +27,16 @@ public:
   TupleCell(AttrType attr_type, char *data) : attr_type_(attr_type), data_(data)
   {}
 
+  void set_null()
+  {
+    this->attr_type_ = AttrType::NULLS;
+  }
+
+  bool is_null() const
+  {
+    return (this->attr_type_ == AttrType::NULLS);
+  }
+
   void set_type(AttrType type)
   {
     this->attr_type_ = type;

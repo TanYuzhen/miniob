@@ -77,6 +77,9 @@ bool PredicateOperator::do_predicate(std::vector<FilterUnit *> &filter_units, Tu
     left_expr->get_value(tuple, left_cell);
     right_expr->get_value(tuple, right_cell);
 
+    if (left_cell.is_null() || right_cell.is_null()) {
+      return false;
+    }
     // when compared, the expr type is different, should cast the type
     // when left type is different from the right type, all cast it to float type to compare
     AttrType left_type = left_cell.attr_type();

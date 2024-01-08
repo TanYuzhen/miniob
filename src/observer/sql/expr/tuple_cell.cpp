@@ -65,6 +65,7 @@ int TupleCell::compare(const TupleCell &other) const
         return compare_float(this->data_, other.data_);
       case CHARS:
         return compare_string(this->data_, this->length_, other.data_, other.length_);
+      case NULLS:
       default: {
         LOG_WARN("unsupported type: %d", this->attr_type_);
       }
@@ -82,6 +83,10 @@ int TupleCell::compare(const TupleCell &other) const
 const TupleCell TupleCell::add(const TupleCell &left, const TupleCell &right)
 {
   TupleCell result_cell;
+  if (left.is_null() || right.is_null()) {
+    result_cell.set_null();
+    return result_cell;
+  }
   if (left.attr_type_ == INTS && right.attr_type_ == INTS) {
     int result = (*(int *)left.data_) + (*(int *)right.data_);
     int *result_data = new int(result);
@@ -105,6 +110,10 @@ const TupleCell TupleCell::add(const TupleCell &left, const TupleCell &right)
 const TupleCell TupleCell::sub(const TupleCell &left, const TupleCell &right)
 {
   TupleCell result_cell;
+  if (left.is_null() || right.is_null()) {
+    result_cell.set_null();
+    return result_cell;
+  }
   if (left.attr_type_ == INTS && right.attr_type_ == INTS) {
     int result = (*(int *)left.data_) - (*(int *)right.data_);
     int *result_data = new int(result);
@@ -128,6 +137,10 @@ const TupleCell TupleCell::sub(const TupleCell &left, const TupleCell &right)
 const TupleCell TupleCell::mul(const TupleCell &left, const TupleCell &right)
 {
   TupleCell result_cell;
+  if (left.is_null() || right.is_null()) {
+    result_cell.set_null();
+    return result_cell;
+  }
   if (left.attr_type_ == INTS && right.attr_type_ == INTS) {
     int result = (*(int *)left.data_) * (*(int *)right.data_);
     int *result_data = new int(result);
@@ -152,34 +165,29 @@ const TupleCell TupleCell::div(const TupleCell &left, const TupleCell &right)
 {
   TupleCell result_cell;
   // 处理除数为0的情况
+  if (left.is_null() || right.is_null()) {
+    result_cell.set_null();
+    return result_cell;
+  }
   if (right.attr_type_ == INTS && *(int *)right.data_ == 0) {
-    result_cell.set_data((char *)right.data_);
-    result_cell.set_type(INTS);
+    result_cell.set_type(NULLS);
     return result_cell;
   }
   // 处理除数为0的情况
   if (right.attr_type_ == FLOATS && *(float *)right.data_ == 0) {
-    result_cell.set_data((char *)right.data_);
-    result_cell.set_type(FLOATS);
+    result_cell.set_type(NULLS);
     return result_cell;
   }
-  if (left.attr_type_ == INTS && right.attr_type_ == INTS) {
-    int result = (*(int *)left.data_) / (*(int *)right.data_);
-    int *result_data = new int(result);
-    result_cell.set_data((char *)result_data);
-    result_cell.set_type(INTS);
-  } else {
-    TypeCast *left_typeCast = new TypeCast(left.attr_type_, AttrType::FLOATS);
-    TypeCast *right_typeCast = new TypeCast(right.attr_type_, AttrType::FLOATS);
-    float *tmp_left = (float *)left_typeCast->cast(left.data_);
-    float *tmp_right = (float *)right_typeCast->cast(right.data_);
-    assert(nullptr != tmp_left);
-    assert(nullptr != tmp_right);
-    float *result_data = new float((*tmp_left) / (*tmp_right));
-    result_cell.set_data((char *)result_data);
-    result_cell.set_type(FLOATS);
-    delete tmp_left;
-    delete tmp_right;
-  }
+  TypeCast *left_typeCast = new TypeCast(left.attr_type_, AttrType::FLOATS);
+  TypeCast *right_typeCast = new TypeCast(right.attr_type_, AttrType::FLOATS);
+  float *tmp_left = (float *)left_typeCast->cast(left.data_);
+  float *tmp_right = (float *)right_typeCast->cast(right.data_);
+  assert(nullptr != tmp_left);
+  assert(nullptr != tmp_right);
+  float *result_data = new float((*tmp_left) / (*tmp_right));
+  result_cell.set_data((char *)result_data);
+  result_cell.set_type(FLOATS);
+  delete tmp_left;
+  delete tmp_right;
   return result_cell;
 }
