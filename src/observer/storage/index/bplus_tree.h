@@ -297,6 +297,9 @@ struct InternalIndexNode : public IndexNode {
   /**
    * internal node just store order -1 keys and order rids, the last rid is last rght child.
    */
+  /**
+   * internal node just store the key values, don't need to store the data values (Record values(RID)) on Disk
+   */
   char array[0];
 };
 

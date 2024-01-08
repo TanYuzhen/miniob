@@ -43,34 +43,70 @@ typedef enum {
 } CompOp;
 
 //属性值类型
+typedef enum { NO_EXP_OP, ADD_OP, SUB_OP, MUL_OP, DIV_OP, EXP_OP_NUM } ExpOp;
 typedef enum { UNDEFINED, CHARS, INTS, DATE, FLOATS } AttrType;
 
 //属性值
-typedef struct _Value {
+typedef struct Value {
   AttrType type;  // type of value
   void *data;     // value
 } Value;
 
-typedef struct _Condition {
-  int left_is_attr;    // TRUE if left-hand side is an attribute
-                       // 1时，操作符左边是属性名，0时，是属性值
-  Value left_value;    // left-hand side value if left_is_attr = FALSE
-  RelAttr left_attr;   // left-hand side attribute
-  CompOp comp;         // comparison operator
-  int right_is_attr;   // TRUE if right-hand side is an attribute
-                       // 1时，操作符右边是属性名，0时，是属性值
-  RelAttr right_attr;  // right-hand side attribute if right_is_attr = TRUE 右边的属性
-  Value right_value;   // right-hand side value if right_is_attr = FALSE
+typedef struct Expr Expr;
+typedef struct UnaryExpr {
+  int is_attr;  // whether is the table field
+  Value value;
+  RelAttr attr;
+} UnaryExpr;  // 单目表达式
+
+typedef struct BinaryExpr {
+  ExpOp op;
+  Expr *left_expr;
+  Expr *right_expr;
+  int minus;
+} BinaryExpr;  // 双目表达式
+
+typedef struct Expr {
+  int type;   // 0->unaryExpr;1->binaryExpr;2->agg-function
+  int brace;  // whether contain ()
+  UnaryExpr *unaryExpr;
+  BinaryExpr *binaryExpr;
+} Expr;
+
+typedef struct Condition {
+  //  int left_is_attr;    // TRUE if left-hand side is an attribute
+  //                       // 1时，操作符左边是属性名，0时，是属性值
+  //  Value left_value;    // left-hand side value if left_is_attr = FALSE
+  //  RelAttr left_attr;   // left-hand side attribute
+  //  CompOp comp;         // comparison operator
+  //  int right_is_attr;   // TRUE if right-hand side is an attribute
+  //                       // 1时，操作符右边是属性名，0时，是属性值
+  //  RelAttr right_attr;  // right-hand side attribute if right_is_attr = TRUE 右边的属性
+  //  Value right_value;   // right-hand side value if right_is_attr = FALSE
+  CompOp comp;
+  // cpp中，引用被设计为必须在声明时初始化，并且一旦绑定到一个对象，就不能再绑定到另一个对象。
+  // 所以在cpp中，引用不能被拷贝，此处应该为指针
+  Expr *left_expr;
+  Expr *right_expr;
 } Condition;
+
+typedef struct ProjectCol {
+  int is_star;  // 0->not '*', 1->'*'
+  char *relation_name;
+  Expr *expr;
+} ProjectCol;
 
 // struct of select
 typedef struct {
-  size_t attr_num;                // Length of attrs in Select clause
+  size_t attr_num;  // Length of attrs in Select clause
+  // in bison file,when syntactic parsing 'select' SQL,the attributes array is useless
   RelAttr attributes[MAX_NUM];    // attrs in Select clause
   size_t relation_num;            // Length of relations in Fro clause
   char *relations[MAX_NUM];       // relations in From clause
   size_t condition_num;           // Length of conditions in Where clause
   Condition conditions[MAX_NUM];  // conditions in Where clause
+  size_t project_num;             // Length of projects
+  ProjectCol projects[MAX_NUM];   // project items
 } Selects;
 
 typedef struct {
@@ -190,6 +226,26 @@ typedef struct Query {
 extern "C" {
 #endif  // __cplusplus
 
+void unary_expr_init_attr(UnaryExpr *expr, RelAttr *relation_attr);
+void unary_expr_init_value(UnaryExpr *expr, Value *value);
+void unary_expr_destroy(UnaryExpr *expr);
+
+void binary_expr_init(BinaryExpr *expr, ExpOp op, Expr *left_expr, Expr *right_expr);
+void binary_expr_set_minus(BinaryExpr *expr);
+void binary_expr_destroy(BinaryExpr *expr);
+
+void expr_init_unary(Expr *expr, UnaryExpr *u_expr);
+void expr_init_binary(Expr *expr, BinaryExpr *b_expr);
+void expr_set_with_brace(Expr *expr);
+void expr_destroy(Expr *expr);
+
+void condition_init(Condition *condition, CompOp op, Expr *left_expr, Expr *right_expr);
+void condition_destroy(Condition *condition);
+
+void project_init_star(ProjectCol *project_col, const char *relation_name);
+void project_init_expr(ProjectCol *project_col, Expr *expr);
+void project_destroy(ProjectCol *project_col);
+
 void relation_attr_init(RelAttr *relation_attr, const char *relation_name, const char *attribute_name);
 void relation_attr_destroy(RelAttr *relation_attr);
 
@@ -199,9 +255,9 @@ int value_init_date(Value *value, const char *v);
 void value_init_string(Value *value, const char *v);
 void value_destroy(Value *value);
 
-void condition_init(Condition *condition, CompOp comp, int left_is_attr, RelAttr *left_attr, Value *left_value,
-    int right_is_attr, RelAttr *right_attr, Value *right_value);
-void condition_destroy(Condition *condition);
+// void condition_init(Condition *condition, CompOp comp, int left_is_attr, RelAttr *left_attr, Value *left_value,
+//     int right_is_attr, RelAttr *right_attr, Value *right_value);
+// void condition_destroy(Condition *condition);
 
 void attr_info_init(AttrInfo *attr_info, const char *name, AttrType type, size_t length);
 void attr_info_destroy(AttrInfo *attr_info);
@@ -210,6 +266,7 @@ void selects_init(Selects *selects, ...);
 void selects_append_attribute(Selects *selects, RelAttr *rel_attr);
 void selects_append_relation(Selects *selects, const char *relation_name);
 void selects_append_conditions(Selects *selects, Condition conditions[], size_t condition_num);
+void selects_append_projects(Selects *selects, ProjectCol *project_col);
 void selects_destroy(Selects *selects);
 
 void inserts_init(Inserts *inserts, const char *relation_name);

@@ -19,6 +19,7 @@ See the Mulan PSL v2 for more details. */
 #include "rc.h"
 #include "sql/stmt/stmt.h"
 #include "storage/common/field.h"
+#include "sql/expr/expression.h"
 
 class FieldMeta;
 class FilterStmt;
@@ -43,9 +44,9 @@ public:
   {
     return tables_;
   }
-  const std::vector<Field> &query_fields() const
+  const std::vector<Expression *> &get_projects() const
   {
-    return query_fields_;
+    return projects_;
   }
   FilterStmt *filter_stmt() const
   {
@@ -53,7 +54,8 @@ public:
   }
 
 private:
-  std::vector<Field> query_fields_;
+  std::vector<Expression *> projects_;
+  //  std::vector<Field> query_fields_;
   std::vector<Table *> tables_;
   FilterStmt *filter_stmt_ = nullptr;
 };

@@ -50,21 +50,61 @@ Tuple *ProjectOperator::current_tuple()
   return &tuple_;
 }
 
-void ProjectOperator::add_projection(const Table *table, const FieldMeta *field_meta, bool is_single)
+void gen_project_name(const Expression *expr, bool is_single_table, std::string &result_name)
+{
+  if (expr->with_brace()) {
+    result_name += '(';
+  }
+  switch (expr->type()) {
+    case ExprType::FIELD: {
+      FieldExpr *fexpr = (FieldExpr *)expr;
+      const Table *table = fexpr->table();
+      const FieldMeta *field_meta = fexpr->field().meta();
+      if (!is_single_table) {
+        result_name += std::string(table->name()) + '.' + std::string(field_meta->name());
+      } else {
+        result_name += std::string(field_meta->name());
+      }
+      break;
+    }
+    case ExprType::VALUE: {
+      ValueExpr *vexpr = (ValueExpr *)expr;
+      TupleCell cell;
+      vexpr->get_tuple_cell(cell);
+      std::stringstream ss;
+      cell.to_string(ss);
+      result_name += ss.str();
+      break;
+    }
+    case ExprType::BINARY: {
+      BinaryExpression *bexpr = (BinaryExpression *)expr;
+      if (bexpr->is_minus()) {
+        // 为-1这样的形式，只需要处理bexpr->right_expr即可
+        result_name += '-';
+      } else {
+        gen_project_name(bexpr->get_left(), is_single_table, result_name);
+        result_name += bexpr->get_op_char();
+      }
+      gen_project_name(bexpr->get_right(), is_single_table, result_name);
+      break;
+    }
+    default:
+      break;
+  }
+  if (expr->with_brace()) {
+    result_name += ')';
+  }
+}
+
+void ProjectOperator::add_projection(Expression *expression, bool is_single)
 {
   // 对单表来说，展示的(alias) 字段总是字段名称，
   // 对多表查询来说，展示的alias 需要带表名字
-  TupleCellSpec *spec = new TupleCellSpec(new FieldExpr(table, field_meta));
-  std::string alias_name;
-  if (!is_single) {
-    alias_name = std::string(table->name()) + '.' + std::string(field_meta->name());
-  } else {
-    alias_name = std::string(field_meta->name());
-  }
-  char *spec_alias = new char[alias_name.size() + 1];
-  memset(spec_alias, 0, alias_name.size() + 1);
-  memcpy(spec_alias, alias_name.c_str(), alias_name.size() + 1);
-  spec->set_alias(spec_alias);
+  // TupleCellSpec代表一个表的第一行，那一行属性名
+  TupleCellSpec *spec = new TupleCellSpec(expression);
+  std::string *alias_name = new std::string("");
+  gen_project_name(expression, is_single, *alias_name);
+  spec->set_alias(alias_name->c_str());
   tuple_.add_cell_spec(spec);
 }
 

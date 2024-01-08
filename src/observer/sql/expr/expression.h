@@ -15,16 +15,14 @@ See the Mulan PSL v2 for more details. */
 #pragma once
 
 #include <string.h>
+#include <assert.h>
 #include "storage/common/field.h"
 #include "sql/expr/tuple_cell.h"
+#include "common/log/log.h"
 
 class Tuple;
 
-enum class ExprType {
-  NONE,
-  FIELD,
-  VALUE,
-};
+enum class ExprType { NONE, FIELD, VALUE, BINARY };
 
 class Expression {
 public:
@@ -33,6 +31,17 @@ public:
 
   virtual RC get_value(const Tuple &tuple, TupleCell &cell) const = 0;
   virtual ExprType type() const = 0;
+  void set_with_brace()
+  {
+    with_brace_ = 1;
+  }
+  bool with_brace() const
+  {
+    return with_brace_;
+  }
+
+private:
+  bool with_brace_ = 0;
 };
 
 class FieldExpr : public Expression {
@@ -40,6 +49,12 @@ public:
   FieldExpr() = default;
   FieldExpr(const Table *table, const FieldMeta *field) : field_(table, field)
   {}
+  FieldExpr(const Table *table, const FieldMeta *field, bool with_brace) : FieldExpr(table, field)
+  {
+    if (with_brace) {
+      set_with_brace();
+    }
+  }
 
   virtual ~FieldExpr() = default;
 
@@ -72,7 +87,6 @@ public:
   {
     return field_.table();
   }
-
   RC get_value(const Tuple &tuple, TupleCell &cell) const override;
 
 private:
@@ -86,6 +100,12 @@ public:
   {
     if (value.type == CHARS) {
       tuple_cell_.set_length(strlen((const char *)value.data));
+    }
+  }
+  ValueExpr(const Value &value, bool with_brace) : ValueExpr(value)
+  {
+    if (with_brace) {
+      set_with_brace();
     }
   }
 
@@ -104,4 +124,103 @@ public:
 
 private:
   TupleCell tuple_cell_;
+};
+class BinaryExpression : public Expression {
+public:
+  BinaryExpression() = default;
+  BinaryExpression(ExpOp op, Expression *left_expr, Expression *right_expr)
+      : op_(op), left_expr_(left_expr), right_expr_(right_expr)
+  {}
+  BinaryExpression(ExpOp op, Expression *left_expr, Expression *right_expr, bool with_brace)
+      : BinaryExpression(op, left_expr, right_expr)
+  {
+    if (with_brace) {
+      set_with_brace();
+    }
+  }
+  BinaryExpression(ExpOp op, Expression *left_expr, Expression *right_expr, bool with_brace, bool is_minus)
+      : BinaryExpression(op, left_expr, right_expr, with_brace)
+  {
+    is_minus_ = is_minus;
+  }
+
+  bool is_minus() const
+  {
+    return is_minus_;
+  }
+
+  virtual ~BinaryExpression() = default;
+
+  const char get_op_char()
+  {
+    switch (op_) {
+      case ADD_OP:
+        return '+';
+        break;
+      case SUB_OP:
+        return '-';
+        break;
+      case MUL_OP:
+        return '*';
+        break;
+      case DIV_OP:
+        return '/';
+        break;
+      default:
+        LOG_ERROR("unsupported op");
+        break;
+    }
+    return '?';
+  }
+
+  const Expression *get_left() const
+  {
+    return left_expr_;
+  }
+  const Expression *get_right() const
+  {
+    return right_expr_;
+  }
+
+  RC get_value(const Tuple &tuple, TupleCell &final_cell) const override
+  {
+    TupleCell left_cell;
+    TupleCell right_cell;
+    RC rc = left_expr_->get_value(tuple, left_cell);
+    rc = right_expr_->get_value(tuple, right_cell);
+    // calculate
+    assert(left_cell.attr_type() != DATE && right_cell.attr_type() != DATE);
+    assert(left_cell.attr_type() != CHARS && right_cell.attr_type() != CHARS);
+    switch (op_) {
+      case ADD_OP:
+        final_cell = TupleCell::add(left_cell, right_cell);
+        break;
+      case SUB_OP:
+        final_cell = TupleCell::sub(left_cell, right_cell);
+        break;
+      case MUL_OP:
+        final_cell = TupleCell::mul(left_cell, right_cell);
+        break;
+      case DIV_OP:
+        final_cell = TupleCell::div(left_cell, right_cell);
+        break;
+      default:
+        LOG_ERROR("unsupported calculate op");
+        break;
+    }
+
+    // at first, convert to float
+    return rc;
+  }
+  ExprType type() const override
+  {
+    return ExprType::BINARY;
+  }
+
+private:
+  ExpOp op_ = NO_EXP_OP;
+  Expression *left_expr_ = nullptr;
+  Expression *right_expr_ = nullptr;
+  TupleCell expr_result_;
+  bool is_minus_ = false;
 };

@@ -63,6 +63,14 @@ public:
     return attr_type_;
   }
 
+  static const TupleCell add(const TupleCell &left, const TupleCell &right);
+
+  static const TupleCell sub(const TupleCell &left, const TupleCell &right);
+
+  static const TupleCell mul(const TupleCell &left, const TupleCell &right);
+
+  static const TupleCell div(const TupleCell &left, const TupleCell &right);
+
 private:
   AttrType attr_type_ = UNDEFINED;
   int length_ = -1;

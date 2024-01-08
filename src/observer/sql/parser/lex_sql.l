@@ -36,8 +36,9 @@ DOUBLE_QUOTE     \"
 {WHITE_SAPCE}                                        // ignore whitespace
 \n                                                   ;
 
-[\-]?{DIGIT}+                                        yylval->number=atoi(yytext); RETURN_TOKEN(NUMBER);
-[\-]?{DIGIT}+{DOT}{DIGIT}+                           yylval->floats=(float)(atof(yytext)); RETURN_TOKEN(FLOAT);
+"-"                                                  RETURN_TOKEN(SUB);
+{DIGIT}+                                        yylval->number=atoi(yytext); RETURN_TOKEN(NUMBER);
+{DIGIT}+{DOT}{DIGIT}+                           yylval->floats=(float)(atof(yytext)); RETURN_TOKEN(FLOAT);
 
 ";"                                                  RETURN_TOKEN(SEMICOLON);
 {DOT}                                                RETURN_TOKEN(DOT);
@@ -90,6 +91,8 @@ DOUBLE_QUOTE     \"
 "<"                                                  RETURN_TOKEN(LT);
 ">="                                                 RETURN_TOKEN(GE);
 ">"                                                  RETURN_TOKEN(GT);
+"+"                                                  RETURN_TOKEN(ADD);
+"/"                                                  RETURN_TOKEN(DIV);
 {QUOTE}([0-9]{4})\-([0-9]|[0-9]{2})\-([0-9]|[0-9]{2}){QUOTE}     yylval->string=strdup(yytext); RETURN_TOKEN(DATE_STR);
 {QUOTE}(\\\47|[\40\42A-Za-z0-9_/\.\-\%])*{QUOTE}            yylval->string=strdup(yytext); RETURN_TOKEN(SSS);
 {DOUBLE_QUOTE}(\\\42|[\40\47A-Za-z0-9_/\.\-\%])*{DOUBLE_QUOTE}            yylval->string=strdup(yytext); RETURN_TOKEN(SSS);

@@ -20,6 +20,9 @@ void *TypeCast::cast(void *data)
         case CHARS: {
           return int_to_char(data);
         }
+        case INTS: {
+          return new int(*(int *)data);
+        }
         default: {
           LOG_ERROR("Error cast to the new type");
         } break;
@@ -33,6 +36,9 @@ void *TypeCast::cast(void *data)
         case CHARS: {
           return float_to_char(data);
         }
+        case FLOATS: {
+          return new float(*(float *)data);
+        }
         default: {
           LOG_ERROR("Error cast to the new type");
         } break;
@@ -45,6 +51,9 @@ void *TypeCast::cast(void *data)
         }
         case FLOATS: {
           return char_to_float(data);
+        }
+        case CHARS: {
+          return new char(*(char *)data);
         }
         default: {
           LOG_ERROR("Error cast to the new type");

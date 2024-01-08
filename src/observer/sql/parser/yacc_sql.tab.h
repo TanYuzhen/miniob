@@ -97,17 +97,20 @@ enum yytokentype {
   LE = 299,           /* LE  */
   GE = 300,           /* GE  */
   NE = 301,           /* NE  */
-  NOT = 302,          /* NOT  */
-  LIKE = 303,         /* LIKE  */
-  UNIQUE = 304,       /* UNIQUE  */
-  NUMBER = 305,       /* NUMBER  */
-  FLOAT = 306,        /* FLOAT  */
-  ID = 307,           /* ID  */
-  PATH = 308,         /* PATH  */
-  SSS = 309,          /* SSS  */
-  STAR = 310,         /* STAR  */
-  STRING_V = 311,     /* STRING_V  */
-  DATE_STR = 312      /* DATE_STR  */
+  ADD = 302,          /* ADD  */
+  SUB = 303,          /* SUB  */
+  DIV = 304,          /* DIV  */
+  NOT = 305,          /* NOT  */
+  LIKE = 306,         /* LIKE  */
+  UNIQUE = 307,       /* UNIQUE  */
+  NUMBER = 308,       /* NUMBER  */
+  FLOAT = 309,        /* FLOAT  */
+  ID = 310,           /* ID  */
+  PATH = 311,         /* PATH  */
+  SSS = 312,          /* SSS  */
+  STAR = 313,         /* STAR  */
+  STRING_V = 314,     /* STRING_V  */
+  DATE_STR = 315      /* DATE_STR  */
 };
 typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -115,17 +118,20 @@ typedef enum yytokentype yytoken_kind_t;
 /* Value type.  */
 #if !defined YYSTYPE && !defined YYSTYPE_IS_DECLARED
 union YYSTYPE {
-#line 112 "yacc_sql.y"
+#line 115 "yacc_sql.y"
 
   struct _Attr *attr;
   struct _Condition *condition1;
   struct _Value *value1;
+  struct Expr *exp1;
+  struct Expr *exp2;
+  struct Expr *exp3;
   char *string;
   int number;
   float floats;
   char *position;
 
-#line 131 "yacc_sql.tab.h"
+#line 137 "yacc_sql.tab.h"
 };
 typedef union YYSTYPE YYSTYPE;
 #define YYSTYPE_IS_TRIVIAL 1

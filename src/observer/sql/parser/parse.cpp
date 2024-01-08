@@ -83,37 +83,139 @@ void value_destroy(Value *value)
   value->data = nullptr;
 }
 
-void condition_init(Condition *condition, CompOp comp, int left_is_attr, RelAttr *left_attr, Value *left_value,
-    int right_is_attr, RelAttr *right_attr, Value *right_value)
+void unary_expr_init_attr(UnaryExpr *expr, RelAttr *relation_attr)
 {
-  condition->comp = comp;
-  condition->left_is_attr = left_is_attr;
-  if (left_is_attr) {
-    condition->left_attr = *left_attr;
+  expr->is_attr = 1;
+  expr->attr = *relation_attr;
+}
+void unary_expr_init_value(UnaryExpr *expr, Value *value)
+{
+  expr->is_attr = 0;
+  expr->value = *value;
+}
+void unary_expr_destroy(UnaryExpr *expr)
+{
+  if (expr->is_attr) {
+    relation_attr_destroy(&expr->attr);
   } else {
-    condition->left_value = *left_value;
+    value_destroy(&expr->value);
   }
+  return;
+}
 
-  condition->right_is_attr = right_is_attr;
-  if (right_is_attr) {
-    condition->right_attr = *right_attr;
-  } else {
-    condition->right_value = *right_value;
+void binary_expr_init(BinaryExpr *expr, ExpOp op, Expr *left_expr, Expr *right_expr)
+{
+  expr->op = op;
+  expr->left_expr = left_expr;
+  expr->right_expr = right_expr;
+  expr->minus = 0;
+}
+void binary_expr_set_minus(BinaryExpr *expr)
+{
+  expr->minus = 1;
+}
+void binary_expr_destroy(BinaryExpr *expr)
+{
+  expr_destroy(expr->left_expr);
+  expr_destroy(expr->right_expr);
+}
+
+void expr_init_unary(Expr *expr, UnaryExpr *u_expr)
+{
+  expr->type = 0;
+  expr->binaryExpr = nullptr;
+  expr->unaryExpr = u_expr;
+  expr->brace = 0;
+}
+void expr_init_binary(Expr *expr, BinaryExpr *b_expr)
+{
+  expr->type = 1;
+  expr->binaryExpr = b_expr;
+  expr->unaryExpr = nullptr;
+  expr->brace = 0;
+}
+void expr_set_with_brace(Expr *expr)
+{
+  expr->brace = 1;
+}
+void expr_destroy(Expr *expr)
+{
+  if (expr->type == 0) {
+    unary_expr_destroy(expr->unaryExpr);
+  } else if (expr->type == 1) {
+    binary_expr_destroy(expr->binaryExpr);
   }
+}
+
+void condition_init(Condition *condition, CompOp op, Expr *left_expr, Expr *right_expr)
+{
+  condition->comp = op;
+  condition->left_expr = left_expr;
+  condition->right_expr = right_expr;
 }
 void condition_destroy(Condition *condition)
 {
-  if (condition->left_is_attr) {
-    relation_attr_destroy(&condition->left_attr);
+  expr_destroy(condition->left_expr);
+  expr_destroy(condition->right_expr);
+}
+
+void project_init_star(ProjectCol *project_col, const char *relation_name)
+{
+  project_col->is_star = 1;
+  if (relation_name != nullptr) {
+    project_col->relation_name = strdup(relation_name);
   } else {
-    value_destroy(&condition->left_value);
+    project_col->relation_name = nullptr;
   }
-  if (condition->right_is_attr) {
-    relation_attr_destroy(&condition->right_attr);
-  } else {
-    value_destroy(&condition->right_value);
+  project_col->expr = nullptr;
+}
+void project_init_expr(ProjectCol *project_col, Expr *expr)
+{
+  project_col->is_star = 0;
+  project_col->expr = expr;
+  project_col->relation_name = nullptr;
+}
+void project_destroy(ProjectCol *project_col)
+{
+  if (project_col->relation_name != nullptr) {
+    free(project_col->relation_name);
+  }
+  if (project_col->expr != nullptr) {
+    expr_destroy(project_col->expr);
   }
 }
+
+// void condition_init(Condition *condition, CompOp comp, int left_is_attr, RelAttr *left_attr, Value *left_value,
+//     int right_is_attr, RelAttr *right_attr, Value *right_value)
+//{
+//   condition->comp = comp;
+//   condition->left_is_attr = left_is_attr;
+//   if (left_is_attr) {
+//     condition->left_attr = *left_attr;
+//   } else {
+//     condition->left_value = *left_value;
+//   }
+//
+//   condition->right_is_attr = right_is_attr;
+//   if (right_is_attr) {
+//     condition->right_attr = *right_attr;
+//   } else {
+//     condition->right_value = *right_value;
+//   }
+// }
+// void condition_destroy(Condition *condition)
+//{
+//   if (condition->left_is_attr) {
+//     relation_attr_destroy(&condition->left_attr);
+//   } else {
+//     value_destroy(&condition->left_value);
+//   }
+//   if (condition->right_is_attr) {
+//     relation_attr_destroy(&condition->right_attr);
+//   } else {
+//     value_destroy(&condition->right_value);
+//   }
+// }
 
 void attr_info_init(AttrInfo *attr_info, const char *name, AttrType type, size_t length)
 {
@@ -136,7 +238,10 @@ void selects_append_relation(Selects *selects, const char *relation_name)
 {
   selects->relations[selects->relation_num++] = strdup(relation_name);
 }
-
+void selects_append_projects(Selects *selects, ProjectCol *project_col)
+{
+  selects->projects[selects->project_num++] = *project_col;
+}
 void selects_append_conditions(Selects *selects, Condition conditions[], size_t condition_num)
 {
   assert(condition_num <= sizeof(selects->conditions) / sizeof(selects->conditions[0]));
@@ -163,6 +268,11 @@ void selects_destroy(Selects *selects)
     condition_destroy(&selects->conditions[i]);
   }
   selects->condition_num = 0;
+
+  for (size_t i = 0; i < selects->project_num; i++) {
+    project_destroy(&selects->projects[i]);
+  }
+  selects->project_num = 0;
 }
 
 void inserts_init(Inserts *inserts, const char *relation_name)
